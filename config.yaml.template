@@ -1,0 +1,9 @@
+password: 
+apn: ""
+protocol: UDP/TCP
+host: 
+port: 
+
+mode: 1
+activeInterval: 10
+inactiveInterval: 20

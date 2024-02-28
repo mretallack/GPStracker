@@ -1,12 +1,17 @@
 import serial
+import yaml
 
 
 class TrackerConfig():
 
-    def __init__(self):
+    def __init__(self, configfile):
         # open the serial port
         # set the baud rate to 921600
         self.ser = serial.Serial('/dev/ttyUSB0', 921600, timeout=1)
+
+        # load in the yaml config file
+        self.config=yaml.safe_load(open(configfile))
+        
 
 
     def wait_for_reply(self, required_reply, timeout=2, error=True):
@@ -72,6 +77,8 @@ class TrackerConfig():
         pass
 
     def set_mode0(self,t1,t2):
+        # 1. T1 is between 10-600 seconds, and T2 is between 1-24 hours.
+        # 2. When device is vibrate it will run as T1 and when device detect to still it will run as T2
         # send the mode command
         self.ser.write(f'MODE,0,{t1},{t2}'.encode())
 
@@ -79,11 +86,24 @@ class TrackerConfig():
         self.wait_for_reply("MODE,OK")
 
     def set_mode1(self,t1):
+        # T is the report interval time, and its range is between 60-600 seconds
         # send the mode command
         self.ser.write(f'MODE,1,{t1}'.encode())
 
         # and wait for the correct reply
-        self.wait_for_reply("MODE,OK")        
+        self.wait_for_reply("MODE,OK")   
+
+
+    def set_mode7(self,t1, t2):
+        # T1 is between 10-1440 minutes, and T2 is between 1-24 hours.
+        # When device is vibrate it will run as T1 and when device detect to still it will run as T2.
+        # * MODE 7 is an optimized version based on MODE 0, with lower
+        # power consumption than MODE 0     
+        self.ser.write(f'MODE,7,{t1},{t2}'.encode())
+
+        # and wait for the correct reply
+        self.wait_for_reply("MODE,OK")
+
 
     def set_network(self, address, port):
         # send the IP and port command
@@ -119,24 +139,31 @@ class TrackerConfig():
         print(reply.decode())   
 
 
-    def configure(self, active_interval, inactive_interval=20, testmode=False):
+    def configure(self):
 
         self.start()
 
         self.reset()
 
-        self.set_password("1924")
+        self.set_password(self.config["password"])
 
-        self.set_apn("iot.1nce.net")
+        self.set_apn(self.config["apn"])
 
-        self.set_network("retallack.org.uk",7700)
+        self.set_network(self.config["host"],self.config["port"])
 
-        self.set_protocol("UDP")
+        self.set_protocol(self.config["protocol"])
 
-        if testmode:
-            self.set_mode1(active_interval)
-        else:
+        active_interval=self.config["activeInterval"]
+        inactive_interval=self.config["inactiveInterval"]
+
+        if self.config["mode"] == 0:
             self.set_mode0(active_interval,inactive_interval)
+        elif self.config["mode"] == 1:
+            self.set_mode1(active_interval)
+        elif self.config["mode"] == 7:
+            self.set_mode7(active_interval, inactive_interval) 
+        else:
+            print("Unsupported Mode")
 
         self.start()
 
@@ -147,8 +174,8 @@ class TrackerConfig():
 
 
 
-cfg=TrackerConfig()
+cfg=TrackerConfig("config.yaml")
 
-#cfg.configure(10, testmode=True)
+cfg.configure()
 
 #cfg.get_position()
