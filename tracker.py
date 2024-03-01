@@ -2,7 +2,10 @@
 import socket
 import paho.mqtt.client as mqtt
 import json
+import geopy.distance
+from datetime import datetime
 
+print("Starting Tracker1")
 
 HOST="0.0.0.0"
 PORT=7700
@@ -213,13 +216,10 @@ client.connect("retallack.org.uk", 1883, 60)
 
 client.loop_start()
 
-auto_discovery_payload = {
-            "json_attributes_topic": belle_device_id+"/attributes",
-            "name": trackername
-        }
+print("Starting Tracker")
 
-client.publish("homeassistant/device_tracker/"+belle_device_id+"/config", json.dumps(auto_discovery_payload))
-
+last_pos=None
+last_pos_time=None
 
 with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
 
@@ -255,6 +255,8 @@ with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
 
                 print("got "+str(res))
 
+                current_pos=(res["latitude"], res["longitude"])
+
                 payload={
                         "latitude": res["latitude"], 
                         "longitude": res["longitude"], 
@@ -262,6 +264,24 @@ with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
                     }
 
                 print("Sending location update...")
+
+                auto_discovery_payload = {
+                            "json_attributes_topic": belle_device_id+"/attributes",
+                            "name": trackername
+                        }
+
+                client.publish("homeassistant/device_tracker/"+belle_device_id+"/config", json.dumps(auto_discovery_payload))
+
+                # convert knots speed to MPH
+                speed_mph=0
+                if len(res["speed"])>0:
+                    speed_mph = float(res["speed"]) * 1.15078
+                    
+                distance=0
+                # and calculate the distance between the last point,
+                # but only if the last point was recorded less than 10 minutes ago
+                if last_pos!=None and ((datetime.now() - last_pos_time).total_seconds() < 600):
+                    distance=geopy.distance.geodesic(last_pos, current_pos).km
 
                 # publish the location
                 client.publish(belle_device_id+"/attributes", json.dumps(payload))
@@ -275,9 +295,13 @@ with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
                 #datetime_object = datetime.strptime(res["timestamp", '%m/%d/%y %H:%M:%S')
 
                 client.publish(belle_device_id+"/speed", res["speed"])
+                client.publish(belle_device_id+"/speedmph", speed_mph)
                 client.publish(belle_device_id+"/course", res["course"])
+                client.publish(belle_device_id+"/distance", distance)
                 client.publish(belle_device_id+"/timestamp", res["timestamp"])
 
+                last_pos = current_pos
+                last_pos_time = datetime.now()
 
         except Exception as e:
             print(e)
