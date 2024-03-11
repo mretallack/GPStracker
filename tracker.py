@@ -292,6 +292,20 @@ with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
                 client.publish(belle_device_id+"/reportIntervalTime", res["ReportIntervalTime"])
                 client.publish(belle_device_id+"/batteryVoltage", res["batteryVoltage"])
 
+                # scale the battery voltage to a percent
+                # the base (0% is assumed to be 3.59V)
+                lower_limit=3.59
+                upper_limit=4.19
+                battery_percent=float(res["batteryVoltage"])-lower_limit
+                if battery_percent<0:
+                    battery_percent=0
+                # the max voltage (100%) is 4.19v
+                battery_percent=(battery_percent/(upper_limit-lower_limit))* 100
+                if battery_percent>100:
+                    battery_percent=100
+                
+                client.publish(belle_device_id+"/batteryPercent", int(battery_percent))
+
                 #datetime_object = datetime.strptime(res["timestamp", '%m/%d/%y %H:%M:%S')
 
                 client.publish(belle_device_id+"/speed", res["speed"])
