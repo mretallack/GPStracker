@@ -1,3 +1,5 @@
 venv
 config.yaml
 venv_config
+__pycache__/
+tmp/
